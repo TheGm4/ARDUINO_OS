@@ -1,0 +1,286 @@
+# ARDUINO_OS
+// Tiny Arduino HTML Notepad OS
+// HTML notepad, LED with adjustable blink, music, ultrasonic distance with piezo warning
+
+#define LED LED_BUILTIN
+#define BUZ 8
+#define TRIG 9
+#define ECHO 10
+
+// Notes
+#define C4 262
+#define E4 330
+#define G4 392
+#define C5 523
+#define D5 587
+#define E5 659
+#define F5 698
+#define FS5 740
+#define G5 784
+#define A5 880
+#define B5 988
+#define C6 1047
+#define E6 1319
+#define G6 1568
+#define C7 2093
+#define REST 0
+
+// Songs
+int kompa[] = {C5, E5, G5, C6, G5, E5};
+int kompaT[] = {8, 8, 8, 8, 8, 8};
+int kompaL = 6;
+
+int mario[] = {G5, E5, C5, G5, E5, C5};
+int marioT[] = {8, 8, 8, 8, 8, 8};
+int marioL = 6;
+
+int sonic[] = {C5, D5, E5, FS5, G5, C4};
+int sonicT[] = {8, 8, 8, 8, 8, 8};
+int sonicL = 6;
+
+// Notepad
+#define MAX 20
+String note[MAX];
+int n = 0;
+bool edit = false;
+
+// Music
+String song = "";
+bool play = false;
+unsigned long lastM = 0;
+int idx = 0;
+
+// Distance
+bool dist = false;
+unsigned long lastD = 0;
+#define D_INT 2000
+#define D_THR 20
+
+// LED Blink
+unsigned long blinkInterval = 500; // Default 500ms
+
+void beep(int note, int dur) {
+  if (note == REST) {
+    noTone(BUZ);
+    delay(dur);
+  } else {
+    tone(BUZ, note, dur);
+    delay(dur * 1.3);
+    noTone(BUZ);
+  }
+}
+
+void warn() {
+  for (int i = 0; i < 3; i++) {
+    tone(BUZ, 1000, 100);
+    delay(150);
+    noTone(BUZ);
+    delay(50);
+  }
+}
+
+void render() {
+  Serial.println("---- Rendering HTML ----");
+  for (int i = 0; i < n; i++) {
+    String l = note[i];
+    l.trim();
+    if (l.length() == 0) continue;
+    
+    if (l.startsWith("<h1>") && l.endsWith("</h1>")) {
+      Serial.println("=== " + l.substring(4, l.length() - 5) + " ===");
+    } else if (l.startsWith("<p>") && l.endsWith("</p>")) {
+      Serial.println(l.substring(3, l.length() - 4));
+    } else if (l.startsWith("<b>") && l.endsWith("</b>")) {
+      Serial.println("**" + l.substring(3, l.length() - 4) + "**");
+    } else if (l.startsWith("<i>") && l.endsWith("</i>")) {
+      Serial.println("_" + l.substring(3, l.length() - 4) + "_");
+    } else if (l == "<br>" || l == "<br/>") {
+      Serial.println();
+    } else {
+      Serial.println(l);
+    }
+  }
+  Serial.println("------------------------");
+}
+
+void blink() {
+  static unsigned long last = 0;
+  static bool state = false;
+  if (play) {
+    digitalWrite(LED, HIGH);
+  } else if (millis() - last >= blinkInterval) {
+    digitalWrite(LED, state ? HIGH : LOW);
+    state = !state;
+    last = millis();
+  }
+}
+
+void music() {
+  if (!play || song.length() == 0 || millis() - lastM < 50) return;
+  
+  int* mel; int* tmp; int len;
+  if (song == "KOMPA") { mel = kompa; tmp = kompaT; len = kompaL; }
+  else if (song == "MARIO") { mel = mario; tmp = marioT; len = marioL; }
+  else if (song == "SONIC") { mel = sonic; tmp = sonicT; len = sonicL; }
+  else return;
+  
+  if (idx < len) {
+    beep(mel[idx], 1000 / tmp[idx]);
+    idx++;
+  } else {
+    idx = 0;
+  }
+  lastM = millis();
+}
+
+void distance() {
+  if (!dist || millis() - lastD < D_INT) return;
+  
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+  
+  long dur = pulseIn(ECHO, HIGH);
+  int d = dur * 0.034 / 2;
+  Serial.print("Distance: ");
+  Serial.print(d);
+  Serial.println(" cm");
+  
+  if (d < D_THR && d > 0) {
+    bool wasP = play;
+    play = false;
+    noTone(BUZ);
+    Serial.print("Warning: Object at ");
+    Serial.print(d);
+    Serial.println(" cm!");
+    warn();
+    play = wasP;
+    idx = 0;
+  }
+  
+  lastD = millis();
+}
+
+void serial() {
+  static unsigned long last = 0;
+  if (millis() - last < 50 || !Serial.available()) return;
+  
+  String c = Serial.readStringUntil('\n');
+  c.trim();
+  if (c.length() == 0) return;
+  c.toUpperCase();
+
+  if (edit) {
+    if (c == "END") {
+      edit = false;
+      Serial.println("Exited edit mode.");
+    } else if (n < MAX) {
+      note[n++] = c;
+      Serial.print("Added: " + c + " (");
+      Serial.print(n);
+      Serial.println("/" + String(MAX) + ")");
+    } else {
+      Serial.println("Notepad full!");
+    }
+  } else {
+    if (c == "HELP") {
+      Serial.println("Commands: HELP, LED, MUSICUI, EDIT, SHOW, CLEAR, RUN, STOP, DISTANCE, BLINKRATE");
+      Serial.println("Tags: <h1>, <p>, <b>, <i>, <br>");
+      Serial.println("Songs: KOMPA, MARIO, SONIC");
+    } else if (c == "LED") {
+      digitalWrite(LED, !digitalRead(LED));
+      Serial.println("Toggled LED.");
+    } else if (c == "MUSICUI") {
+      Serial.println("Select: KOMPA, MARIO, SONIC");
+      unsigned long t = millis();
+      while (millis() - t < 5000) {
+        if (Serial.available()) break;
+        delay(10);
+      }
+      if (Serial.available()) {
+        String s = Serial.readStringUntil('\n');
+        s.trim();
+        s.toUpperCase();
+        if (s == "KOMPA" || s == "MARIO" || s == "SONIC") {
+          song = s;
+          play = true;
+          idx = 0;
+          Serial.println("Playing " + s);
+        } else {
+          Serial.println("Unknown song.");
+        }
+      } else {
+        Serial.println("Timeout.");
+      }
+    } else if (c == "STOP") {
+      play = false;
+      noTone(BUZ);
+      Serial.println("Stopped music.");
+    } else if (c == "EDIT") {
+      edit = true;
+      n = 0;
+      Serial.println("EDIT mode: Enter HTML. Type END.");
+    } else if (c == "SHOW") {
+      Serial.println("---- Raw Content ----");
+      if (n == 0) Serial.println("(Empty)");
+      else for (int i = 0; i < n; i++) Serial.println(note[i]);
+      Serial.println("---------------------");
+    } else if (c == "CLEAR") {
+      n = 0;
+      Serial.println("Notepad cleared.");
+    } else if (c == "RUN") {
+      if (n == 0) Serial.println("Notepad empty!");
+      else render();
+    } else if (c == "DISTANCE") {
+      dist = !dist;
+      Serial.println(dist ? "Distance enabled." : "Distance disabled.");
+    } else if (c == "BLINKRATE") {
+      Serial.println("Enter blink interval (100-2000 ms):");
+      unsigned long t = millis();
+      while (millis() - t < 5000) {
+        if (Serial.available()) break;
+        delay(10);
+      }
+      if (Serial.available()) {
+        String s = Serial.readStringUntil('\n');
+        s.trim();
+        long rate = s.toInt();
+        if (rate >= 100 && rate <= 2000) {
+          blinkInterval = rate;
+          Serial.print("Set blink interval to ");
+          Serial.print(rate);
+          Serial.println(" ms");
+        } else {
+          Serial.println("Invalid rate (100-2000 ms).");
+        }
+      } else {
+        Serial.println("Timeout.");
+      }
+    } else {
+      Serial.println("Unknown: " + c);
+    }
+  }
+  Serial.print("Gautam&Gaurav co. technologies> ");
+}
+
+void setup() {
+  pinMode(LED, OUTPUT);
+  pinMode(BUZ, OUTPUT);
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+  Serial.begin(9600);
+  while (!Serial) delay(10);
+  Serial.println("=== Tiny GautamOs HTML Notepad OS BY GAUTAM KRISHNA MV (1st patreon GAURAV my own brother)===");
+  Serial.println("Commands: HELP, LED, MUSICUI, EDIT, SHOW, CLEAR, RUN, STOP, DISTANCE, BLINKRATE");
+  Serial.print("Gautam&Gaurav co. technologies> ");
+}
+
+void loop() {
+  blink();
+  music();
+  distance();
+  serial();
+  delay(10);
+}
