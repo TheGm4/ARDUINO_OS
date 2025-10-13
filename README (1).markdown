@@ -4,134 +4,131 @@ A compact "OS" for Arduino Uno managing an HTML notepad, LED control with adjust
 
 [![Arduino Uno](https://img.shields.io/badge/Arduino-Uno-blue)](https://www.arduino.cc) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-## Features
-- **HTML Notepad**: Store 20 lines, render `<h1>`, `<p>`, `<b>`, `<i>`, `<br>`.
-- **LED**: Blinks at adjustable interval (default 500ms); toggle via command; solid during music.
-- **Music**: Plays Kompa, Mario, Sonic on piezo buzzer.
-- **Distance**: Measures every 2s when enabled; piezo beeps if object < 20 cm.
-- **Serial Interface**: Command-line control, no buttons.
+GautamOS v5.4 Ultimate Edition
+A versatile Arduino-based operating system with games, music, and utility features.
+Developed by Gautam Krishna MV & Gaurav Co. Technologies (2025)
+GautamOS v5.4 is a lightweight, interactive OS for the Arduino UNO, featuring Snake and Pong games, nostalgic Mario and Sonic music, a notepad with HTML rendering, a calculator, distance sensing, and LED control. Optimized for memory and speed, it offers an engaging experience for hobbyists.
+Features
 
-## Hardware Requirements
-- Arduino Uno
-- Piezo Buzzer (pin 8 to GND)
-- HC-SR04 (Trig: pin 9, Echo: pin 10, VCC: 5V, GND)
-- LED (built-in on pin 13)
-- USB cable, Arduino IDE (1.8.19+)
+Games:
 
-## Setup
-1. Clone/download:
-   ```bash
-   git clone https://github.com/TheGm4/first-ever-arduino-os.git
-   ```
-   Or ZIP [here](https://github.com/TheGm4/first-ever-arduino-os/archive/refs/heads/main.zip).
-2. Open `OPERATING_SYSTEM.ino` in Arduino IDE.
-3. Set **Tools > Board > Arduino Uno**, select port.
-4. Upload code (**Sketch > Upload**).
-5. Open Serial Monitor (**Tools > Serial Monitor**, 9600 baud, Newline):
-   ```
-   === Tiny GautamOs HTML Notepad OS BY GAUTAM KRISHNA MV (1st patreon GAURAV my own brother)===
-   Commands: HELP, LED, MUSICUI, EDIT, SHOW, CLEAR, RUN, STOP, DISTANCE, BLINKRATE
-   Gautam&Gaurav co. technologies>
-   ```
-6. Connect hardware:
-   - Buzzer: Pin 8 to GND.
-   - HC-SR04: Trig to 9, Echo to 10, VCC to 5V, GND.
-   - LED: Built-in on pin 13 (no wiring needed).
+Snake: Navigate a 10x10 grid to eat food (F), avoiding walls and self-collision. Three difficulty levels (Easy: 600ms, Medium: 400ms, Hard: 200ms) with high scores. Controls: W (Up), A (Left), S (Down), D (Right), END to quit.
+Pong: Move a paddle to hit a ball in a 10x5 grid, scoring per hit. Controls: A (Left), D (Right), END to quit.
 
-## Usage
-- Enter commands at `Gautam&Gaurav co. technologies>` (case-insensitive).
-- `EDIT`: Add HTML lines; `END` to exit.
-- `MUSICUI`: Select song; `STOP` to stop.
-- `DISTANCE`: Toggle distance measurement; piezo warns if < 20 cm.
-- `BLINKRATE`: Set LED blink interval (100–2000 ms).
-- LED blinks; solid during music.
 
-## Commands
-| Command     | Description |
-|-------------|-------------|
-| `HELP`      | List commands, tags, songs. |
-| `LED`       | Toggle LED. |
-| `MUSICUI`   | Select song (KOMPA, MARIO, SONIC). |
-| `STOP`      | Stop music. |
-| `EDIT`      | Add HTML lines (max 20). |
-| `SHOW`      | Show notepad content. |
-| `CLEAR`     | Clear notepad. |
-| `RUN`       | Render HTML. |
-| `DISTANCE`  | Toggle distance measurement. |
-| `BLINKRATE` | Set LED blink interval (100–2000 ms). |
+Music:
 
-## Supported HTML Tags
-| Tag         | Input Example        | Output           |
-|-------------|----------------------|------------------|
-| `<h1></h1>` | `<h1>Title</h1>`     | `=== Title ===`  |
-| `<p></p>`   | `<p>Text</p>`        | `Text`           |
-| `<b></b>`   | `<b>Bold</b>`        | `**Bold**`       |
-| `<i></i>`   | `<i>Italic</i>`      | `_Italic_`       |
-| `<br>`      | `<br>`               | (Empty line)     |
+Mario and Sonic themes play as background music during games (non-blocking).
+Foreground music playback via MUSICUI (Mario theme).
 
-## Supported Songs
-| Song   | Description |
-|--------|-------------|
-| `KOMPA`| Kompa Passion riff. |
-| `MARIO`| Super Mario Bros theme. |
-| `SONIC`| Sonic the Hedgehog riff. |
 
-## Examples
-### Music
-```plaintext
-Gautam&Gaurav co. technologies> MUSICUI
-Select: KOMPA, MARIO, SONIC
-SONIC
-Playing SONIC
-Gautam&Gaurav co. technologies> STOP
-Stopped music.
-```
+Notepad: Store and render up to 20 lines with HTML tags (<h1>, <p>, <b>, <i>).
+Calculator: Supports basic arithmetic (+, -, *, /).
+Distance Sensor: Uses HC-SR04 to measure distance, alerting for objects within 20 cm.
+LED Control: Toggle LED or adjust
+12.6sInterruptedwait dont mention anything about repoHere's a GitHub README for your GautamOS v5.4 Arduino project, designed for a repository named ARDUINOOS. It highlights the Snake and Pong games, Mario and Sonic background music, and other features, with a focus on memory and performance optimizations for the Arduino UNO. No specific repository details are mentioned beyond the name.
 
-### HTML
-```plaintext
-Gautam&Gaurav co. technologies> EDIT
-EDIT mode: Enter HTML. Type END.
-<h1>Sonic</h1>
-Added: <h1>Sonic</h1> (1/20)
-<p>Fast!</p>
-Added: <p>Fast!</p> (2/20)
-END
-Gautam&Gaurav co. technologies> RUN
----- Rendering HTML ----
-=== Sonic ===
-Fast!
-------------------------
-```
+GautamOS v5.4 Ultimate Edition
+A versatile Arduino-based operating system with games, music, and utility features.
+Developed by Gautam Krishna MV & Gaurav Co. Technologies (2025)
+GautamOS v5.4 is a lightweight, interactive OS for the Arduino UNO, featuring Snake and Pong games, nostalgic Mario and Sonic music, a notepad with HTML rendering, a calculator, distance sensing, and LED control. Optimized for memory and speed, it offers an engaging experience for hobbyists.
+Features
 
-### Distance
-```plaintext
-Gautam&Gaurav co. technologies> DISTANCE
-Distance enabled.
-Distance: 25 cm
-Distance: 15 cm
-Warning: Object at 15 cm!
-Gautam&Gaurav co. technologies> DISTANCE
-Distance disabled.
-```
+Games:
 
-### Blink Rate
-```plaintext
-Gautam&Gaurav co. technologies> BLINKRATE
-Enter blink interval (100-2000 ms):
-1000
-Set blink interval to 1000 ms
-Gautam&Gaurav co. technologies>
-```
+Snake: Navigate a 10x10 grid to eat food (F), avoiding walls and self-collision. Three difficulty levels (Easy: 600ms, Medium: 400ms, Hard: 200ms) with high score tracking. Controls: W (Up), A (Left), S (Down), D (Right), END to quit.
+Pong: Move a paddle to hit a ball in a 10x5 grid, scoring points per hit. Controls: A (Left), D (Right), END to quit.
 
-## Troubleshooting
-- **No Serial**: Check USB/port, 9600 baud, Newline.
-- **No Sound**: Verify buzzer (pin 8, GND). Test: `tone(8, 1000, 100);`.
-- **Bad Distance**: Check HC-SR04 (Trig: 9, Echo: 10, VCC: 5V, GND). Range 2–400 cm.
-- **No LED**: Verify built-in LED on pin 13.
-- **Memory Warning**: Reduce `MAX` to 10 in `OPERATING_SYSTEM.ino`.
 
-## Contributing
-Fork, edit, submit PR. Report issues at [GitHub Issues](https://github.com/TheGm4/first-ever-arduino-os/issues).
+Music:
 
-## License
-[MIT License](LICENSE)
+Mario and Sonic themes as non-blocking background music during games.
+Foreground music playback with MUSICUI command (Mario theme).
+
+
+Notepad: Store and render up to 20 lines with basic HTML tags (<h1>, <p>, <b>, <i>).
+Calculator: Perform basic arithmetic (addition, subtraction, multiplication, division).
+Distance Sensor: Measure distance using HC-SR04 sensor with alerts for objects within 20 cm.
+LED Control: Toggle or adjust LED blink rate (10-2000 ms).
+
+Hardware Requirements
+
+Arduino UNO
+HC-SR04 Ultrasonic Sensor (Trig: Pin 9, Echo: Pin 10)
+Piezo Buzzer (Pin 8)
+LED (Pin 13, built-in)
+USB connection for Serial Monitor (9600 baud)
+
+Setup Instructions
+
+Open in Arduino IDE:
+
+Load GautamOS_v5.4_Snake_Pong.ino in the Arduino IDE.
+
+
+Connect Hardware:
+
+Wire the HC-SR04 sensor (Trig to Pin 9, Echo to Pin 10).
+Connect the piezo buzzer to Pin 8.
+Use the built-in LED on Pin 13.
+
+
+Upload and Run:
+
+Upload the sketch to your Arduino UNO.
+Open the Serial Monitor (9600 baud) to interact with GautamOS.
+
+
+
+Usage
+
+Access Commands:
+
+Type HELP in the Serial Monitor to view all commands.
+
+
+Commands:
+
+HELP: Display available commands.
+LED: Toggle the LED.
+MUSICUI: Play Mario theme.
+STOP: Stop music playback.
+EDIT: Enter notepad mode (type END to exit).
+SHOW: Display notepad contents.
+RUN: Render notepad as HTML.
+DISTANCE: Toggle distance sensor.
+BLINKRATE: Set LED blink rate (10-2000 ms).
+CALC: Perform arithmetic (e.g., 5+7).
+DIFFICULTY EASY/MEDIUM/HARD: Set Snake game difficulty.
+GAME SNAKE: Start Snake game.
+GAME PONG: Start Pong game.
+
+
+
+Optimizations
+
+Memory:
+
+Reduced note definitions to only those used in Mario and Sonic themes.
+Stored song arrays in PROGMEM to minimize SRAM usage.
+Limited snake length to 50 to prevent memory overflow.
+Minimized String object usage in critical loops.
+
+
+Performance:
+
+Reduced loop() delay to 5ms for faster response.
+Lowered game input polling delay to 20ms for smoother gameplay.
+Used pgm_read_word for efficient PROGMEM access.
+Optimized game logic to reduce redundant calculations.
+
+
+
+Contributing
+Contributions are welcome! Fork the repository, make changes, and submit a pull request. Test your code on an Arduino UNO for compatibility.
+License
+This project is licensed under the MIT License. See the LICENSE file for details.
+Acknowledgments
+
+Inspired by classic arcade games and retro music.
+Developed for educational and hobbyist purposes.
