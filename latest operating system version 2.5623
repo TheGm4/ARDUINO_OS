@@ -1,0 +1,795 @@
+//My apologies! The code had some formatting issues. Here's the clean, working version without any text artifacts:
+
+// ============================================
+// GautamOS v2.1 - Enhanced Arduino Operating System
+// By Gautam Krishna MV & Gaurav
+// ============================================
+
+#include <EEPROM.h>
+#include <math.h>
+
+// Pin Definitions
+#define LED LED_BUILTIN
+#define BUZ 8
+#define TRIG 9
+#define ECHO 10
+
+// Musical Notes
+#define C4 262
+#define E4 330
+#define G4 392
+#define C5 523
+#define D5 587
+#define E5 659
+#define F5 698
+#define G5 784
+#define A5 880
+#define B5 988
+#define C6 1047
+#define REST 0
+
+// Global Settings
+bool soundEnabled = true;
+int difficulty = 1;
+
+// Forward declarations
+void showHelp();
+void toggleLED();
+void setSoundMode();
+void setDifficulty();
+void showGitHub();
+void showScores();
+void calculatorMode();
+void startMarioGame();
+void startSnakeGame();
+void startEditMode();
+void showNotepad();
+void clearNotepad();
+void renderNotepad();
+void saveToEEPROM();
+void loadFromEEPROM();
+void toggleDistance();
+void setBlinkRate();
+
+// Command Structure
+struct Command {
+  const char* name;
+  void (*action)();
+};
+
+Command commands[] = {
+  {"HELP", showHelp},
+  {"LED", toggleLED},
+  {"SOUND", setSoundMode},
+  {"DIFFICULTY", setDifficulty},
+  {"CALC", calculatorMode},
+  {"MARIO", startMarioGame},
+  {"SNAKE", startSnakeGame},
+  {"EDIT", startEditMode},
+  {"SHOW", showNotepad},
+  {"CLEAR", clearNotepad},
+  {"RUN", renderNotepad},
+  {"SAVE", saveToEEPROM},
+  {"LOAD", loadFromEEPROM},
+  {"DISTANCE", toggleDistance},
+  {"BLINKRATE", setBlinkRate},
+  {"GITHUB", showGitHub},
+  {"SCORES", showScores}
+};
+
+const int numCommands = sizeof(commands) / sizeof(commands[0]);
+
+// Notepad
+#define MAX_NOTES 20
+#define EEPROM_ADDR 0
+String notes[MAX_NOTES];
+int noteCount = 0;
+bool editMode = false;
+
+// High Scores
+int marioHighScore = 0;
+int snakeHighScore = 0;
+
+// Mario Game
+int marioPos = 0;
+int obstaclePos = 10;
+bool marioJump = false;
+int marioScore = 0;
+bool marioActive = false;
+unsigned long lastMarioUpdate = 0;
+
+// Snake Game
+#define SNAKE_MAX 20
+int snakeX[SNAKE_MAX];
+int snakeY[SNAKE_MAX];
+int snakeLen = 3;
+int foodX = 5;
+int foodY = 5;
+int dirX = 1;
+int dirY = 0;
+int snakeScore = 0;
+bool snakeActive = false;
+unsigned long lastSnakeUpdate = 0;
+
+// Distance Sensor
+bool distEnabled = false;
+unsigned long lastDistCheck = 0;
+#define DIST_INTERVAL 2000
+#define DIST_THRESHOLD 20
+
+// LED Blink
+unsigned long blinkInterval = 500;
+unsigned long lastBlink = 0;
+bool ledState = false;
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+void playTone(int note, int dur) {
+  if (!soundEnabled || note == 0) {
+    delay(dur);
+    return;
+  }
+  tone(BUZ, note, dur);
+  delay(dur * 1.3);
+  noTone(BUZ);
+}
+
+void warn() {
+  if (!soundEnabled) return;
+  for (int i = 0; i < 3; i++) {
+    tone(BUZ, 1000, 100);
+    delay(150);
+    noTone(BUZ);
+    delay(50);
+  }
+}
+
+String waitForInput(unsigned long timeout) {
+  unsigned long start = millis();
+  while (millis() - start < timeout) {
+    if (Serial.available()) {
+      String input = Serial.readStringUntil('\n');
+      input.trim();
+      return input;
+    }
+    delay(10);
+  }
+  Serial.println(F("Timeout"));
+  return "";
+}
+
+// ============================================
+// BOOT ANIMATION
+// ============================================
+
+void bootAnimation() {
+  Serial.println(F("\n================================"));
+  Serial.println(F("    GautamOS v2.1 Enhanced"));
+  Serial.println(F(" By Gautam Krishna MV & Gaurav"));
+  Serial.println(F("================================\n"));
+  
+  Serial.println(F("Loading modules..."));
+  const char* modules[] = {"Notepad", "Calculator", "Games", "Sensors", "Sound"};
+  for (int i = 0; i < 5; i++) {
+    Serial.print(F("["));
+    for (int j = 0; j < 10; j++) {
+      Serial.print(j <= (i * 2) ? F("#") : F(" "));
+    }
+    Serial.print(F("] "));
+    Serial.print((i + 1) * 20);
+    Serial.print(F("% - "));
+    Serial.println(modules[i]);
+    playTone(C5 + (i * 100), 50);
+    delay(200);
+  }
+  Serial.println(F("\nSystem Ready!\n"));
+}
+
+// ============================================
+// LED BLINK SYSTEM
+// ============================================
+
+void updateBlink() {
+  if (millis() - lastBlink >= blinkInterval) {
+    ledState = !ledState;
+    digitalWrite(LED, ledState ? HIGH : LOW);
+    lastBlink = millis();
+  }
+}
+
+void setBlinkRate() {
+  Serial.println(F("Enter blink interval (100-2000 ms):"));
+  String input = waitForInput(5000);
+  if (input.length() > 0) {
+    long rate = input.toInt();
+    if (rate >= 100 && rate <= 2000) {
+      blinkInterval = rate;
+      Serial.print(F("Blink rate set to "));
+      Serial.print(rate);
+      Serial.println(F(" ms"));
+    } else {
+      Serial.println(F("Invalid rate (100-2000 ms)"));
+    }
+  }
+}
+
+// ============================================
+// DISTANCE SENSOR
+// ============================================
+
+void updateDistance() {
+  if (!distEnabled || millis() - lastDistCheck < DIST_INTERVAL) return;
+  
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+  
+  long duration = pulseIn(ECHO, HIGH);
+  int distance = duration * 0.034 / 2;
+  
+  Serial.print(F("Distance: "));
+  Serial.print(distance);
+  Serial.println(F(" cm"));
+  
+  if (distance < DIST_THRESHOLD && distance > 0) {
+    Serial.print(F("Warning: Object at "));
+    Serial.print(distance);
+    Serial.println(F(" cm!"));
+    warn();
+  }
+  
+  lastDistCheck = millis();
+}
+
+void toggleDistance() {
+  distEnabled = !distEnabled;
+  Serial.println(distEnabled ? F("Distance sensor enabled") : F("Distance sensor disabled"));
+}
+
+// ============================================
+// NOTEPAD SYSTEM
+// ============================================
+
+void startEditMode() {
+  editMode = true;
+  noteCount = 0;
+  Serial.println(F("=== EDIT MODE ==="));
+  Serial.println(F("Enter HTML lines. Type END to finish."));
+  Serial.println(F("Tags: <h1>, <p>, <b>, <i>, <br>"));
+}
+
+void showNotepad() {
+  Serial.println(F("---- Raw Content ----"));
+  if (noteCount == 0) {
+    Serial.println(F("(Empty)"));
+  } else {
+    for (int i = 0; i < noteCount; i++) {
+      Serial.println(notes[i]);
+    }
+  }
+  Serial.println(F("---------------------"));
+}
+
+void clearNotepad() {
+  noteCount = 0;
+  Serial.println(F("Notepad cleared"));
+}
+
+void renderNotepad() {
+  if (noteCount == 0) {
+    Serial.println(F("Notepad is empty!"));
+    return;
+  }
+  
+  Serial.println(F("\n==== Rendered HTML ===="));
+  for (int i = 0; i < noteCount; i++) {
+    String line = notes[i];
+    line.trim();
+    if (line.length() == 0) continue;
+    
+    if (line.startsWith("<h1>") && line.endsWith("</h1>")) {
+      Serial.print(F("=== "));
+      Serial.print(line.substring(4, line.length() - 5));
+      Serial.println(F(" ==="));
+    } else if (line.startsWith("<p>") && line.endsWith("</p>")) {
+      Serial.println(line.substring(3, line.length() - 4));
+    } else if (line.startsWith("<b>") && line.endsWith("</b>")) {
+      Serial.print(F("**"));
+      Serial.print(line.substring(3, line.length() - 4));
+      Serial.println(F("**"));
+    } else if (line.startsWith("<i>") && line.endsWith("</i>")) {
+      Serial.print(F("_"));
+      Serial.print(line.substring(3, line.length() - 4));
+      Serial.println(F("_"));
+    } else if (line == "<br>" || line == "<br/>") {
+      Serial.println();
+    } else {
+      Serial.println(line);
+    }
+  }
+  Serial.println(F("=======================\n"));
+}
+
+void saveToEEPROM() {
+  int addr = EEPROM_ADDR;
+  EEPROM.write(addr++, noteCount);
+  
+  for (int i = 0; i < noteCount; i++) {
+    int len = notes[i].length();
+    EEPROM.write(addr++, len);
+    for (int j = 0; j < len; j++) {
+      EEPROM.write(addr++, notes[i][j]);
+    }
+  }
+  
+  Serial.println(F("Saved to EEPROM"));
+  playTone(G5, 100);
+}
+
+void loadFromEEPROM() {
+  int addr = EEPROM_ADDR;
+  noteCount = EEPROM.read(addr++);
+  
+  if (noteCount > MAX_NOTES) {
+    Serial.println(F("No valid data in EEPROM"));
+    noteCount = 0;
+    return;
+  }
+  
+  for (int i = 0; i < noteCount; i++) {
+    int len = EEPROM.read(addr++);
+    notes[i] = "";
+    for (int j = 0; j < len; j++) {
+      notes[i] += (char)EEPROM.read(addr++);
+    }
+  }
+  
+  Serial.print(F("Loaded "));
+  Serial.print(noteCount);
+  Serial.println(F(" lines from EEPROM"));
+  playTone(C6, 100);
+}
+
+// ============================================
+// CALCULATOR
+// ============================================
+
+float evaluateExpression(String expr) {
+  expr.trim();
+  expr.toUpperCase();
+  
+  if (expr.startsWith("SQRT(")) {
+    int end = expr.indexOf(')');
+    float val = expr.substring(5, end).toFloat();
+    return sqrt(val);
+  }
+  
+  if (expr.startsWith("SIN(")) {
+    int end = expr.indexOf(')');
+    float val = expr.substring(4, end).toFloat();
+    return sin(val * PI / 180.0);
+  }
+  
+  if (expr.startsWith("COS(")) {
+    int end = expr.indexOf(')');
+    float val = expr.substring(4, end).toFloat();
+    return cos(val * PI / 180.0);
+  }
+  
+  if (expr.startsWith("POW(")) {
+    int comma = expr.indexOf(',');
+    int end = expr.indexOf(')');
+    float base = expr.substring(4, comma).toFloat();
+    float exp = expr.substring(comma + 1, end).toFloat();
+    return pow(base, exp);
+  }
+  
+  char op = ' ';
+  int opPos = -1;
+  
+  for (int i = 1; i < expr.length(); i++) {
+    if (expr[i] == '+' || expr[i] == '-' || expr[i] == '*' || expr[i] == '/') {
+      op = expr[i];
+      opPos = i;
+      break;
+    }
+  }
+  
+  if (opPos == -1) return expr.toFloat();
+  
+  float num1 = expr.substring(0, opPos).toFloat();
+  float num2 = expr.substring(opPos + 1).toFloat();
+  
+  switch (op) {
+    case '+': return num1 + num2;
+    case '-': return num1 - num2;
+    case '*': return num1 * num2;
+    case '/': return (num2 != 0) ? num1 / num2 : 0;
+    default: return 0;
+  }
+}
+
+void calculatorMode() {
+  Serial.println(F("\n==== CALCULATOR ===="));
+  Serial.println(F("Operators: + - * /"));
+  Serial.println(F("Functions:"));
+  Serial.println(F("  sqrt(x)"));
+  Serial.println(F("  sin(x) cos(x)"));
+  Serial.println(F("  pow(x,y)"));
+  Serial.println(F("Type EXIT to quit"));
+  Serial.println(F("====================\n"));
+  
+  while (true) {
+    Serial.print(F("calc> "));
+    String input = waitForInput(30000);
+    if (input.length() == 0) continue;
+    
+    input.toUpperCase();
+    if (input == "EXIT") {
+      Serial.println(F("Exited calculator"));
+      break;
+    }
+    
+    float result = evaluateExpression(input);
+    Serial.print(F("= "));
+    Serial.println(result, 4);
+    playTone(E5, 50);
+  }
+}
+
+// ============================================
+// MARIO GAME
+// ============================================
+
+void playMarioTheme() {
+  if (!soundEnabled) return;
+  int melody[] = {659, 659, 0, 659, 0, 523, 659, 0, 784};
+  int durations[] = {8, 8, 8, 8, 8, 8, 4, 4, 4};
+  for (int i = 0; i < 9; i++) {
+    int duration = 1000 / durations[i];
+    if (melody[i] == 0) {
+      delay(duration);
+    } else {
+      tone(BUZ, melody[i], duration);
+      delay(duration * 1.3);
+      noTone(BUZ);
+    }
+  }
+}
+
+void startMarioGame() {
+  marioActive = true;
+  marioPos = 0;
+  obstaclePos = 10;
+  marioScore = 0;
+  marioJump = false;
+  
+  Serial.println(F("\n==== MARIO GAME ===="));
+  Serial.println(F("Type JUMP to jump"));
+  Serial.println(F("Type QUIT to exit"));
+  Serial.println(F("====================\n"));
+  
+  playMarioTheme();
+}
+
+void updateMarioGame() {
+  if (!marioActive) return;
+  
+  int speed = 500 - (difficulty * 100);
+  if (millis() - lastMarioUpdate < speed) return;
+  
+  obstaclePos--;
+  if (obstaclePos < 0) {
+    obstaclePos = 10;
+    marioScore++;
+    playTone(C5, 50);
+  }
+  
+  if (obstaclePos == marioPos && !marioJump) {
+    Serial.print(F("\nGAME OVER! Score: "));
+    Serial.println(marioScore);
+    if (marioScore > marioHighScore) {
+      marioHighScore = marioScore;
+      Serial.println(F("NEW HIGH SCORE!"));
+    }
+    playTone(200, 500);
+    marioActive = false;
+    return;
+  }
+  
+  if (marioJump) marioJump = false;
+  
+  String display = "";
+  for (int i = 0; i < 10; i++) {
+    if (i == marioPos && marioJump) display += "^";
+    else if (i == marioPos) display += "M";
+    else if (i == obstaclePos) display += "X";
+    else display += "_";
+  }
+  display += " Score: " + String(marioScore);
+  Serial.println(display);
+  
+  lastMarioUpdate = millis();
+}
+
+// ============================================
+// SNAKE GAME
+// ============================================
+
+void startSnakeGame() {
+  snakeActive = true;
+  snakeLen = 3;
+  snakeScore = 0;
+  dirX = 1;
+  dirY = 0;
+  
+  for (int i = 0; i < snakeLen; i++) {
+    snakeX[i] = 5 - i;
+    snakeY[i] = 5;
+  }
+  
+  foodX = random(0, 10);
+  foodY = random(0, 10);
+  
+  Serial.println(F("\n==== SNAKE GAME ===="));
+  Serial.println(F("W=Up S=Down"));
+  Serial.println(F("A=Left D=Right"));
+  Serial.println(F("Type QUIT to exit"));
+  Serial.println(F("====================\n"));
+}
+
+void updateSnakeGame() {
+  if (!snakeActive) return;
+  
+  int speed = 900 - (difficulty * 200);
+  if (millis() - lastSnakeUpdate < speed) return;
+  
+  for (int i = snakeLen - 1; i > 0; i--) {
+    snakeX[i] = snakeX[i - 1];
+    snakeY[i] = snakeY[i - 1];
+  }
+  
+  snakeX[0] += dirX;
+  snakeY[0] += dirY;
+  
+  if (snakeX[0] < 0) snakeX[0] = 9;
+  if (snakeX[0] > 9) snakeX[0] = 0;
+  if (snakeY[0] < 0) snakeY[0] = 9;
+  if (snakeY[0] > 9) snakeY[0] = 0;
+  
+  if (snakeX[0] == foodX && snakeY[0] == foodY) {
+    snakeLen++;
+    snakeScore++;
+    foodX = random(0, 10);
+    foodY = random(0, 10);
+    playTone(G5, 100);
+  }
+  
+  for (int i = 1; i < snakeLen; i++) {
+    if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
+      Serial.print(F("\nGAME OVER! Score: "));
+      Serial.println(snakeScore);
+      if (snakeScore > snakeHighScore) {
+        snakeHighScore = snakeScore;
+        Serial.println(F("NEW HIGH SCORE!"));
+      }
+      playTone(200, 500);
+      snakeActive = false;
+      return;
+    }
+  }
+  
+  Serial.println(F("--- SNAKE ---"));
+  for (int y = 0; y < 10; y++) {
+    String row = "";
+    for (int x = 0; x < 10; x++) {
+      bool isSnake = false;
+      for (int i = 0; i < snakeLen; i++) {
+        if (snakeX[i] == x && snakeY[i] == y) {
+          row += (i == 0) ? "O" : "o";
+          isSnake = true;
+          break;
+        }
+      }
+      if (!isSnake) {
+        if (x == foodX && y == foodY) row += "*";
+        else row += ".";
+      }
+    }
+    Serial.println(row);
+  }
+  Serial.print(F("Score: "));
+  Serial.println(snakeScore);
+  
+  lastSnakeUpdate = millis();
+}
+
+// ============================================
+// COMMAND HANDLERS
+// ============================================
+
+void showHelp() {
+  Serial.println(F("\n================================"));
+  Serial.println(F("      AVAILABLE COMMANDS"));
+  Serial.println(F("================================"));
+  Serial.println(F("HELP       - Show this menu"));
+  Serial.println(F("GITHUB     - Show GitHub page"));
+  Serial.println(F("LED        - Toggle LED"));
+  Serial.println(F("SOUND      - Toggle sound"));
+  Serial.println(F("DIFFICULTY - Set difficulty"));
+  Serial.println(F("BLINKRATE  - Set LED blink"));
+  Serial.println(F("DISTANCE   - Toggle sensor"));
+  Serial.println(F("CALC       - Calculator"));
+  Serial.println(F("MARIO      - Mario game"));
+  Serial.println(F("SNAKE      - Snake game"));
+  Serial.println(F("SCORES     - Show high scores"));
+  Serial.println(F("EDIT       - Edit notepad"));
+  Serial.println(F("SHOW       - Show notepad"));
+  Serial.println(F("RUN        - Render HTML"));
+  Serial.println(F("CLEAR      - Clear notepad"));
+  Serial.println(F("SAVE       - Save to EEPROM"));
+  Serial.println(F("LOAD       - Load from EEPROM"));
+  Serial.println(F("================================\n"));
+}
+
+void toggleLED() {
+  digitalWrite(LED, !digitalRead(LED));
+  Serial.println(F("LED toggled"));
+}
+
+void setSoundMode() {
+  soundEnabled = !soundEnabled;
+  Serial.println(soundEnabled ? F("Sound ON") : F("Sound OFF"));
+}
+
+void setDifficulty() {
+  Serial.println(F("Select difficulty: 1=Easy, 2=Medium, 3=Hard"));
+  String input = waitForInput(5000);
+  if (input.length() > 0) {
+    int diff = input.toInt();
+    if (diff >= 1 && diff <= 3) {
+      difficulty = diff;
+      Serial.print(F("Difficulty set to "));
+      Serial.println(diff == 1 ? F("Easy") : diff == 2 ? F("Medium") : F("Hard"));
+    }
+  }
+}
+
+void showGitHub() {
+  Serial.println(F("\n========================================"));
+  Serial.println(F("         GITHUB PROFILE PAGE"));
+  Serial.println(F("========================================"));
+  Serial.println(F("Name: Gautam Krishna MV"));
+  Serial.println(F("GitHub:https://github.com/TheGm4/ARDUINO_OS"));
+  Serial.println(F("Email: gautamkrishnamv6@gmail.com"));
+  Serial.println(F(""));
+  Serial.println(F("Projects:"));
+  Serial.println(F("  - GautamOS - Arduino Operating Sys"));
+  Serial.println(F("  - HTML Notepad with Games"));
+  Serial.println(F("  - Calculator & Sensor Integration"));
+  Serial.println(F(""));
+  Serial.println(F("Skills:"));
+  Serial.println(F("  - Embedded Systems (Arduino)"));
+  Serial.println(F("  - C/C++ Programming"));
+  Serial.println(F("  - Game Development"));
+  Serial.println(F("  - Hardware Integration"));
+  Serial.println(F(""));
+  Serial.println(F("Co-Founder: Gautam&Gaurav Co. Tech"));
+  Serial.println(F("1st Patreon: Gaurav (Brother)"));
+  Serial.println(F("========================================\n"));
+}
+
+void showScores() {
+  Serial.println(F("\n==== HIGH SCORES ===="));
+  Serial.print(F("Mario: "));
+  Serial.println(marioHighScore);
+  Serial.print(F("Snake: "));
+  Serial.println(snakeHighScore);
+  Serial.println(F("=====================\n"));
+}
+
+// ============================================
+// SERIAL INPUT HANDLER
+// ============================================
+
+void processSerial() {
+  if (!Serial.available()) return;
+  
+  String input = Serial.readStringUntil('\n');
+  input.trim();
+  if (input.length() == 0) return;
+  
+  if (marioActive) {
+    input.toUpperCase();
+    if (input == "JUMP") {
+      marioJump = true;
+      playTone(G5, 100);
+    } else if (input == "QUIT") {
+      marioActive = false;
+      Serial.println(F("Quit Mario"));
+    }
+    return;
+  }
+  
+  if (snakeActive) {
+    input.toUpperCase();
+    if (input == "W") { dirX = 0; dirY = -1; }
+    else if (input == "S") { dirX = 0; dirY = 1; }
+    else if (input == "A") { dirX = -1; dirY = 0; }
+    else if (input == "D") { dirX = 1; dirY = 0; }
+    else if (input == "QUIT") {
+      snakeActive = false;
+      Serial.println(F("Quit Snake"));
+    }
+    return;
+  }
+  
+  if (editMode) {
+    input.toUpperCase();
+    if (input == "END") {
+      editMode = false;
+      Serial.println(F("Exited edit mode"));
+    } else if (noteCount < MAX_NOTES) {
+      notes[noteCount++] = input;
+      Serial.print(F("Added ("));
+      Serial.print(noteCount);
+      Serial.print(F("/"));
+      Serial.print(MAX_NOTES);
+      Serial.println(F(")"));
+    } else {
+      Serial.println(F("Notepad full!"));
+    }
+    return;
+  }
+  
+  input.toUpperCase();
+  bool found = false;
+  
+  for (int i = 0; i < numCommands; i++) {
+    if (input == commands[i].name) {
+      commands[i].action();
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    Serial.print(F("Unknown command: "));
+    Serial.println(input);
+    Serial.println(F("Type HELP for commands"));
+  }
+  
+  Serial.print(F("Gautam&Gaurav co. technologies> "));
+}
+
+// ============================================
+// SETUP & LOOP
+// ============================================
+
+void setup() {
+  pinMode(LED, OUTPUT);
+  pinMode(BUZ, OUTPUT);
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+  Serial.begin(9600);
+  randomSeed(analogRead(A0));
+  
+  while (!Serial) delay(10);
+  
+  bootAnimation();
+  showHelp();
+  Serial.print(F("Gautam&Gaurav co. technologies> "));
+}
+
+void loop() {
+  updateBlink();
+  updateDistance();
+  updateMarioGame();
+  updateSnakeGame();
+  processSerial();
+  delay(10);
+}
