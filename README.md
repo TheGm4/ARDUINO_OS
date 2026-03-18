@@ -1,4 +1,4 @@
-# GautamOS v5.4 Ultimate Edition
+#  v5.4 Ultimate Edition
 
 **A versatile Arduino-based operating system with games, music, and utility features.**
 
